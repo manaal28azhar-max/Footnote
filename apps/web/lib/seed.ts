@@ -77,7 +77,7 @@ export const SIM_QUESTIONS = [
   "Does a burr grinder matter for espresso?",
   "How often should I lube my bike chain?",
   "When should I replace my disc brake pads?",
-  "Why are my bike brakes squealing?",
+  "Why do my disc brakes squeal?",
 ];
 const NEWS_QUESTIONS = ["Is the Halifax bike lane network open yet?", "Why is the Robie Street bike lane delayed?"];
 

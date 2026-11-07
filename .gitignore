@@ -4,3 +4,4 @@ dist
 .env*
 *.tsbuildinfo
 .pglite
+public/vendor

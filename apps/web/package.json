@@ -6,12 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prebuild": "node scripts/copy-bryntum.mjs",
+    "predev": "node scripts/copy-bryntum.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
     "@bryntum/scheduler": "npm:@bryntum/scheduler-trial@^7.3.8",
-    "@bryntum/scheduler-react": "^7.3.8",
     "@electric-sql/pglite": "^0.5.15",
     "@footnote/core": "*",
     "ag-grid-community": "^36.3.0",

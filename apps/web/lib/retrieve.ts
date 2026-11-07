@@ -54,7 +54,7 @@ export async function retrieve(q: Query, question: string, k = 5, expansion: str
   // passing mention of one word does not end up in the context.
   const best = Number(rows[0].rank);
   return rows
-    .filter((r) => Number(r.rank) >= best * 0.2)
+    .filter((r) => Number(r.rank) >= best * 0.35)
     .slice(0, k)
     .map((r) => ({
       id: String(r.id),

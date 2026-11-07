@@ -157,3 +157,26 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -0.015em; margin: 0; }
 .kv { display: grid; grid-template-columns: 180px 1fr; gap: 6px 16px; font-size: 0.9375rem; }
 .kv dt { color: var(--ink-2); }
 .kv dd { margin: 0; word-break: break-all; }
+
+/* ---------- creator, console, ledger pages ---------- */
+.block { margin-top: 40px; }
+.h3 { font-size: 1.1875rem; }
+.row { display: flex; gap: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.notice.ok-notice { background: var(--money-soft); color: var(--money); }
+.table { width: 100%; border-collapse: collapse; background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; font-size: 0.9375rem; }
+.table th { text-align: left; font-weight: 600; color: var(--ink-2); background: var(--paper); padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.table td { padding: 12px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.table tr:last-child td { border-bottom: 0; }
+.table .num { text-align: right; }
+@media (max-width: 760px) { .table { display: block; overflow-x: auto; } }
+.timeline { border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; margin-top: 12px; display: flex; flex-direction: column; }
+.timeline > * { flex: 1; }
+.timeline-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 12px; font-size: 0.9375rem; }
+.chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.status { text-transform: capitalize; }
+.s-success, .s-completed { color: var(--money); font-weight: 600; }
+.s-returned, .s-failed, .s-rejected, .s-blocked, .s-denied { color: var(--bad); font-weight: 600; }
+.s-unclaimed, .s-pending, .s-onhold, .s-held { color: var(--warn); }
+.checks { display: grid; gap: 10px; }
+.check { display: flex; gap: 10px; align-items: baseline; }
+.check b { min-width: 22px; }

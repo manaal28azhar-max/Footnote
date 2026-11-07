@@ -9,6 +9,7 @@ import { activeWindow, NEWSROOM, validateTerms } from "../lib/terms";
 let d: Db;
 beforeAll(async () => {
   delete process.env.ANTHROPIC_API_KEY; // offline mode: deterministic
+  process.env.SIMULATE_HISTORY = "0";
   d = await freshDb();
 });
 
@@ -65,7 +66,7 @@ describe("the full pipeline", () => {
     await expect(answer(d, DEMO_APP_ID, "How often should I lube my bike chain?")).rejects.toBeInstanceOf(PaymentRequired);
     const [{ n }] = await d.query<{ n: string }>("SELECT count(*)::text AS n FROM answers WHERE question LIKE 'How often should I lube%'");
     expect(n).toBe("0"); // nothing was written: the transaction rolled back
-    await d.query("UPDATE apps SET balance_micro = 500000000 WHERE id = $1", [DEMO_APP_ID]);
+    await d.query("UPDATE apps SET balance_micro = 2000000000 WHERE id = $1", [DEMO_APP_ID]);
   });
 });
 
@@ -96,5 +97,17 @@ describe("licence terms", () => {
     const pub = new Date("2026-11-01T00:00:00Z");
     expect(activeWindow(NEWSROOM, pub, new Date("2026-11-05T00:00:00Z")).label).toBe("Breaking");
     expect(activeWindow(NEWSROOM, pub, new Date("2027-06-01T00:00:00Z")).label).toBe("Archive");
+  });
+});
+
+describe("simulated history", () => {
+  it("creates labelled answers that keep the books balanced", async () => {
+    const { simulateHistory } = await import("../lib/seed");
+    const { internalChecks } = await import("../lib/reconcile");
+    await simulateHistory(d, 40);
+    const [{ n }] = await d.query<{ n: string }>("SELECT count(*)::text AS n FROM answers WHERE mode = 'simulated'");
+    expect(Number(n)).toBe(40);
+    const c = await internalChecks(d);
+    expect(c.answersBalance).toBe(true);
   });
 });

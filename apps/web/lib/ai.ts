@@ -232,8 +232,9 @@ const cacheKey = (question: string, sources: RetrievedSource[]) =>
 
 const DAILY_LIMIT = Number(process.env.DAILY_AI_LIMIT || 300);
 
-export async function generate(q: Query, question: string, sources: RetrievedSource[]): Promise<Generated> {
+export async function generate(q: Query, question: string, sources: RetrievedSource[], opts: { offline?: boolean } = {}): Promise<Generated> {
   if (!sources.length) return { sentences: [], mode: "offline" };
+  if (opts.offline) return { sentences: offlineAnswer(question, sources), mode: "offline" };
   const key = cacheKey(question, sources);
   const hit = await q<{ value: Generated }>("SELECT value FROM llm_cache WHERE key = $1", [key]);
   if (hit[0]) return hit[0].value;

@@ -54,6 +54,7 @@ export interface AnswerResult {
   receiptId: string | null;
   question: string;
   mode: "claude" | "offline";
+  simulated?: boolean;
   models?: { writer: string; auditor: string };
   sentences: (AuditedSentence & { split: number[] })[];
   sources: AnswerSource[];
@@ -90,12 +91,12 @@ async function ownersOf(d: Db, sources: RetrievedSource[]) {
   });
 }
 
-export async function answer(d: Db, appId: string, question: string, now = new Date()): Promise<AnswerResult> {
+export async function answer(d: Db, appId: string, question: string, now = new Date(), opts: { simulated?: boolean } = {}): Promise<AnswerResult> {
   const q = question.trim().slice(0, 500);
   if (normalise(q).length < 2) throw new Error("Please ask a longer question.");
 
-  const sources = await retrieve(d.query, q, 5, await expandQuery(d.query, q));
-  const gen = await generate(d.query, q, sources);
+  const sources = await retrieve(d.query, q, 5, opts.simulated ? [] : await expandQuery(d.query, q));
+  const gen = await generate(d.query, q, sources, { offline: opts.simulated });
   const attr = attribute(gen.sentences, sources.length);
   const owners = await ownersOf(d, sources);
 
@@ -141,6 +142,7 @@ export async function answer(d: Db, appId: string, question: string, now = new D
     receiptId,
     question: q,
     mode: gen.mode,
+    simulated: opts.simulated || undefined,
     models: gen.models,
     sentences: gen.sentences.map((s, j) => ({ ...s, split: attr.perSentence[j] })),
     sources: sources.map((s, i) => ({
@@ -195,7 +197,7 @@ export async function answer(d: Db, appId: string, question: string, now = new D
       JSON.stringify(result),
       price.toString(),
       fee.toString(),
-      gen.mode,
+      opts.simulated ? "simulated" : gen.mode,
       createdAt,
     ]);
     if (receipt) {

@@ -2,13 +2,22 @@ import { formatDollars } from "@footnote/core";
 import { db } from "./db";
 import { answer, PaymentRequired } from "./answer";
 import { baseUrl, json } from "./http";
+import { tryAutoReload } from "./money-ops";
 
 /** Shared by the public API and the demo page. Turns errors into clear HTTP answers. */
 export async function handleAsk(appId: string, question: unknown) {
   if (typeof question !== "string" || !question.trim()) return json({ error: "invalid_request", message: "Send a JSON body with a non-empty \"question\"." }, 400);
   const d = await db();
   try {
-    return json(await answer(d, appId, question));
+    try {
+      return json(await answer(d, appId, question));
+    } catch (e) {
+      // Out of balance: try the owner's auto-reload (saved PayPal + weekly limit), then retry once.
+      if (!(e instanceof PaymentRequired)) throw e;
+      const reload = await tryAutoReload(d, appId).catch((err) => ({ reloaded: false, reason: (err as Error).message }));
+      if (!reload.reloaded) throw e;
+      return json({ ...(await answer(d, appId, question)), autoReload: reload.reason });
+    }
   } catch (e) {
     if (e instanceof PaymentRequired) {
       // Agent-readable: an AI agent can read this, top up through PayPal and retry.

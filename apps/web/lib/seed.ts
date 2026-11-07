@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { resolveOriginals, dollars } from "@footnote/core";
 import type { Db } from "./db";
+import { answer } from "./answer";
 import { CREATORS, SOURCES } from "./seed-data";
 
 export const DEMO_APP_ID = "answerly";
@@ -48,13 +49,51 @@ export async function seed(d: Db) {
       );
     }
 
-    // The demo AI app starts with a $5 sandbox balance so the demo works
-    // before anyone tops up. Real balances come from PayPal top-ups.
+    // The demo AI app starts with a sandbox balance so the demo works before
+    // anyone tops up. Real balances come from PayPal top-ups.
     await q(`INSERT INTO apps (id, name, api_key_hash, balance_micro) VALUES ($1,$2,$3,$4)`, [
       DEMO_APP_ID,
       "Answerly (demo AI app)",
       hashKey(DEMO_APP_KEY),
-      dollars("5.00").toString(),
+      SEED_BALANCE.toString(),
     ]);
+    await q(`INSERT INTO settings (key, value) VALUES ('seed_balance_micro', $1) ON CONFLICT (key) DO NOTHING`, [SEED_BALANCE.toString()]);
   });
+
+  if (process.env.SIMULATE_HISTORY !== "0") await simulateHistory(d);
+}
+
+const SEED_BALANCE = dollars("20.00");
+
+export const SIM_QUESTIONS = [
+  "Why is my sourdough flat and dense?",
+  "How do I stop my sourdough loaf spreading?",
+  "What hydration should a beginner use for bread dough?",
+  "How do I shape a loaf so it rises up, not out?",
+  "My monstera's leaves are turning yellow",
+  "How often should I water a monstera?",
+  "How much light does a houseplant need?",
+  "Why does my espresso taste sour?",
+  "Does a burr grinder matter for espresso?",
+  "How often should I lube my bike chain?",
+  "When should I replace my disc brake pads?",
+  "Why are my bike brakes squealing?",
+];
+const NEWS_QUESTIONS = ["Is the Halifax bike lane network open yet?", "Why is the Robie Street bike lane delayed?"];
+
+/**
+ * Labelled simulated history: real answers through the real pipeline (offline
+ * mode, no model calls), spread over the past two weeks, so dashboards are
+ * not empty on first visit. Every one is stored with mode = 'simulated'.
+ */
+export async function simulateHistory(d: Db, count = 160) {
+  let seedN = 7;
+  const rand = () => ((seedN = (seedN * 16807) % 2147483647) / 2147483647);
+  const now = Date.now();
+  for (let i = 0; i < count; i++) {
+    const news = rand() < 0.18;
+    const q = news ? NEWS_QUESTIONS[Math.floor(rand() * NEWS_QUESTIONS.length)] : SIM_QUESTIONS[Math.floor(rand() * SIM_QUESTIONS.length)];
+    const ageMs = news ? rand() * 40 * 3_600_000 : rand() * 14 * 86_400_000;
+    await answer(d, DEMO_APP_ID, q, new Date(now - ageMs), { simulated: true });
+  }
 }

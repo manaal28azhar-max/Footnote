@@ -1,0 +1,33 @@
+# One-click deploy on Render: the app, its Postgres database, and nightly jobs.
+services:
+  - type: web
+    name: footnote
+    runtime: node
+    plan: starter # free also works, but sleeps after 15 minutes idle
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: footnote-db
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: SANDBOX_CREATOR_EMAILS
+        sync: false
+      - key: FOOTNOTE_SIGNING_KEY
+        sync: false
+      - key: CRON_SECRET
+        generateValue: true
+databases:
+  - name: footnote-db
+    plan: basic-256mb

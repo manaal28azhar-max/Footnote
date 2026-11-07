@@ -1,0 +1,60 @@
+import { createHash, randomBytes } from "node:crypto";
+import { resolveOriginals, dollars } from "@footnote/core";
+import type { Db } from "./db";
+import { CREATORS, SOURCES } from "./seed-data";
+
+export const DEMO_APP_ID = "answerly";
+export const DEMO_APP_KEY = process.env.DEMO_APP_KEY || "fn_demo_answerly_public";
+
+export const hashKey = (key: string) => createHash("sha256").update(key).digest("hex");
+
+function resolveDate(s: string): string {
+  const rel = /^-(\d+)d$/.exec(s);
+  return rel ? new Date(Date.now() - Number(rel[1]) * 86_400_000).toISOString() : new Date(s + "T09:00:00Z").toISOString();
+}
+
+/** Insert the demo world once. Safe to call on every boot. */
+export async function seed(d: Db) {
+  const [{ n }] = await d.query<{ n: string }>("SELECT count(*)::text AS n FROM creators");
+  if (Number(n) > 0) return;
+
+  const sandboxEmails = (process.env.SANDBOX_CREATOR_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+  await d.tx(async (q) => {
+    for (const [i, c] of CREATORS.entries()) {
+      // Demo creators are pre-verified so the demo works end to end. A new
+      // creator signs up and verifies through /creators/join.
+      const email = c.id === "farm" ? null : sandboxEmails[i] || null;
+      await q(
+        `INSERT INTO creators (id, name, handle, site, city, country, bio, paypal_email, verify_token, verified_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())`,
+        [c.id, c.name, c.handle, c.site, c.city, c.country, c.bio, email, randomBytes(12).toString("hex")],
+      );
+    }
+
+    // Copy detection runs once at ingestion: a copy's credit is routed to the
+    // earliest original in its near-duplicate group.
+    const docs = SOURCES.map((s) => ({ id: s.id, text: s.body, publishedAt: resolveDate(s.publishedAt) }));
+    const { creditTo, groups } = resolveOriginals(docs);
+    const simOf = new Map(groups.flatMap((g) => g.copies.map((c) => [c.id, c.similarity] as const)));
+
+    for (const s of SOURCES) {
+      const creator = CREATORS.find((c) => c.id === s.creatorId)!;
+      const original = creditTo[s.id] !== s.id ? creditTo[s.id] : null;
+      await q(
+        `INSERT INTO sources (id, creator_id, title, url, body, published_at, terms, credit_to, copy_similarity)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [s.id, s.creatorId, s.title, `https://${creator.site}${s.path}`, s.body, resolveDate(s.publishedAt), JSON.stringify(s.terms), original, simOf.get(s.id) ?? null],
+      );
+    }
+
+    // The demo AI app starts with a $5 sandbox balance so the demo works
+    // before anyone tops up. Real balances come from PayPal top-ups.
+    await q(`INSERT INTO apps (id, name, api_key_hash, balance_micro) VALUES ($1,$2,$3,$4)`, [
+      DEMO_APP_ID,
+      "Answerly (demo AI app)",
+      hashKey(DEMO_APP_KEY),
+      dollars("5.00").toString(),
+    ]);
+  });
+}

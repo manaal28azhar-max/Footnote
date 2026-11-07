@@ -1,0 +1,10 @@
+{
+  "name": "footnote",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "build": "npm run build -w @footnote/core && npm run build -w @footnote/web",
+    "start": "npm run start -w @footnote/web",
+    "test": "npm test -w @footnote/core && npm test -w @footnote/web"
+  }
+}

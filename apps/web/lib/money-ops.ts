@@ -5,6 +5,7 @@
 import { MICRO_PER_CENT, payableCents, centsToPayPalValue } from "@footnote/core";
 import type { Db, Query } from "./db";
 import * as PP from "./paypal";
+import { randomUUID } from "node:crypto";
 
 const usdToCents = (v: string) => {
   const m = /^(\d+)(?:\.(\d{1,2}))?$/.exec(v);
@@ -100,6 +101,67 @@ export async function tryAutoReload(d: Db, appId: string): Promise<{ reloaded: b
   ]);
   const r = await creditCapture(d, captured);
   return { reloaded: r.credited, reason: r.credited ? `Reloaded $${centsToPayPalValue(amount)} from saved PayPal` : "Reload was not completed" };
+}
+
+// ---------- Refunds: an app withdraws unused balance ----------
+
+/**
+ * Refund unused balance back to the PayPal account that paid it, newest
+ * top-ups first. Only money that came from PayPal can go back to PayPal (the
+ * demo's starting sandbox credit cannot). The balance is debited first, inside
+ * a transaction; any refund PayPal rejects is put back.
+ */
+export async function refundBalance(d: Db, appId: string, amountUsd: string) {
+  if (!PP.paypalConfigured()) throw new Error("PayPal is not configured on this deployment.");
+  const want = usdToCents(amountUsd);
+  if (want <= 0n) throw new Error("Choose an amount above zero.");
+
+  const plan = await d.tx(async (q) => {
+    const [app] = await q<{ balance: string }>("SELECT balance_micro::text AS balance FROM apps WHERE id = $1 FOR UPDATE", [appId]);
+    if (!app) throw new Error("Unknown app.");
+    if (BigInt(app.balance) < want * MICRO_PER_CENT) throw new Error("That is more than the unused balance.");
+    const caps = await q<{ capture_id: string; left: string }>(
+      `SELECT capture_id, (amount_cents - refunded_cents)::text AS left FROM topups
+        WHERE app_id = $1 AND status = 'COMPLETED' AND capture_id IS NOT NULL AND amount_cents > refunded_cents
+          AND captured_at > now() - interval '180 days'
+        ORDER BY captured_at DESC`,
+      [appId],
+    );
+    const parts: { id: string; captureId: string; cents: bigint }[] = [];
+    let need = want;
+    for (const c of caps) {
+      if (need === 0n) break;
+      const take = BigInt(c.left) < need ? BigInt(c.left) : need;
+      parts.push({ id: `rf-${randomUUID()}`, captureId: c.capture_id, cents: take });
+      need -= take;
+    }
+    if (need > 0n) throw new Error("Only money topped up through PayPal can be refunded, and there is not that much to refund.");
+    await q("UPDATE apps SET balance_micro = balance_micro - $1 WHERE id = $2", [(want * MICRO_PER_CENT).toString(), appId]);
+    for (const p of parts) {
+      await q("UPDATE topups SET refunded_cents = refunded_cents + $1 WHERE capture_id = $2", [p.cents.toString(), p.captureId]);
+      await q("INSERT INTO refunds (id, app_id, capture_id, amount_cents, status) VALUES ($1,$2,$3,$4,'CREATING')", [p.id, appId, p.captureId, p.cents.toString()]);
+    }
+    return parts;
+  });
+
+  const results = [];
+  for (const p of plan) {
+    try {
+      const r = await PP.refundCapture(p.captureId, centsToPayPalValue(p.cents), p.id, "Unused Footnote balance returned.");
+      await d.query("UPDATE refunds SET status = $1, paypal_refund_id = $2 WHERE id = $3", [r.status, r.id, p.id]);
+      results.push({ captureId: p.captureId, refundId: r.id, status: r.status, cents: p.cents.toString() });
+    } catch (e) {
+      // Put the money back exactly once.
+      await d.tx(async (q) => {
+        const rows = await q("UPDATE refunds SET status = 'FAILED' WHERE id = $1 AND status = 'CREATING' RETURNING 1", [p.id]);
+        if (!rows.length) return;
+        await q("UPDATE topups SET refunded_cents = refunded_cents - $1 WHERE capture_id = $2", [p.cents.toString(), p.captureId]);
+        await q("UPDATE apps SET balance_micro = balance_micro + $1 WHERE id = $2", [(p.cents * MICRO_PER_CENT).toString(), appId]);
+      });
+      results.push({ captureId: p.captureId, status: "FAILED", cents: p.cents.toString(), error: (e as Error).message.slice(0, 200) });
+    }
+  }
+  return { requestedCents: want.toString(), refunds: results };
 }
 
 // ---------- Payouts ----------

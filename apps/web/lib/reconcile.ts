@@ -19,10 +19,11 @@ export async function internalChecks(d: Db) {
       (SELECT coalesce(sum(amount_micro),0) FROM ledger WHERE kind = 'earning')::text AS earned,
       (SELECT coalesce(sum(balance_micro),0) FROM apps)::text AS balances,
       (SELECT coalesce(sum(amount_cents),0) FROM topups WHERE status = 'COMPLETED')::text AS topup_cents,
+      (SELECT coalesce(sum(amount_cents),0) FROM refunds WHERE status <> 'FAILED')::text AS refund_cents,
       (SELECT count(*) FROM apps)::text AS apps`);
   const [sb] = await d.query<{ value: string }>("SELECT value FROM settings WHERE key = 'seed_balance_micro'");
   const seeded = BigInt(sb?.value ?? "0"); // the demo app's starting sandbox balance
-  const toppedUp = big(r.topup_cents) * 1_000_000n;
+  const toppedUp = (big(r.topup_cents) - big(r.refund_cents)) * 1_000_000n; // net of refunds
   const answersBalance = big(r.earned) + big(r.fees) === big(r.charged);
   const appsBalance = big(r.balances) + big(r.charged) === toppedUp + seeded || process.env.SKIP_BALANCE_CHECK === "1";
   return {
@@ -48,13 +49,17 @@ export async function reconcile(d: Db) {
     "SELECT paypal_txn_id, amount_cents::text FROM payout_items WHERE paypal_txn_id IS NOT NULL AND updated_at > $1",
     [since.toISOString()],
   );
+  const refs = await d.query<{ paypal_refund_id: string; amount_cents: string }>(
+    "SELECT paypal_refund_id, amount_cents::text FROM refunds WHERE paypal_refund_id IS NOT NULL AND created_at > $1",
+    [since.toISOString()],
+  );
   const cents = (v: string) => BigInt(Math.round(Math.abs(Number(v)) * 100));
   const check = (id: string, expected: string) => {
     const t = byId.get(id);
     if (!t) return "pending"; // PayPal's reporting can lag a few hours behind
     return cents(t.transaction_amount.value) === BigInt(expected) ? "matched" : "mismatch";
   };
-  const results = [...caps.map((c) => check(c.capture_id, c.amount_cents)), ...pays.map((p) => check(p.paypal_txn_id, p.amount_cents))];
+  const results = [...caps.map((c) => check(c.capture_id, c.amount_cents)), ...pays.map((p) => check(p.paypal_txn_id, p.amount_cents)), ...refs.map((r) => check(r.paypal_refund_id, r.amount_cents))];
   const paypal = {
     checked: results.length,
     matched: results.filter((x) => x === "matched").length,

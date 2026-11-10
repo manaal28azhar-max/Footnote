@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { appDetail } from "@/lib/queries";
 import { DEMO_APP_ID, DEMO_APP_KEY } from "@/lib/seed";
 import { TopUp } from "@/components/TopUp";
+import { Refund } from "@/components/Refund";
+import { paypalConfigured } from "@/lib/paypal";
 import { AnswersGrid, TopupsGrid } from "@/components/Grids";
 import { baseUrl } from "@/lib/http";
 
@@ -9,7 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function Console({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
-  const { app, answers, topups } = await appDetail(await db(), DEMO_APP_ID);
+  const d = await db();
+  const { app, answers, topups } = await appDetail(d, DEMO_APP_ID);
+  const [{ left }] = await d.query<{ left: string }>(
+    "SELECT coalesce(sum(amount_cents - refunded_cents), 0)::text AS left FROM topups WHERE app_id = $1 AND status = 'COMPLETED' AND capture_id IS NOT NULL AND captured_at > now() - interval '180 days'",
+    [DEMO_APP_ID],
+  );
+  const refundableCents = Math.min(Number(left), Math.floor(Number(app.balance) / 1e6));
   const spent = answers.reduce((a, r) => a + Number(r.price), 0);
   return (
     <main className="page">
@@ -44,6 +52,10 @@ export default async function Console({ searchParams }: { searchParams: Promise<
             <h2 className="h3">Top up with PayPal</h2>
             <p className="muted small">Sandbox only. Log in with a PayPal sandbox personal account to pay with test money.</p>
             <TopUp hasVault={!!app.vault_id} />
+            <h3 className="small" style={{ margin: "22px 0 4px" }}>
+              Withdraw unused balance
+            </h3>
+            <Refund refundableCents={refundableCents} paypal={paypalConfigured()} />
           </section>
           <section className="panel">
             <h2 className="h3">Agent auto-reload</h2>

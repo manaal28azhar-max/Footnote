@@ -151,6 +151,8 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -0.015em; margin: 0; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field label { font-weight: 600; font-size: 0.9375rem; }
 .field input, .field textarea { font: inherit; padding: 10px 12px; border: 1.5px solid var(--rule); border-radius: 8px; background: var(--sheet); color: var(--ink); }
+.input { font: inherit; padding: 8px 12px; border: 1.5px solid var(--rule); border-radius: 8px; background: var(--sheet); color: var(--ink); }
+.input:focus { border-color: var(--ink); outline: none; }
 .field textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; min-height: 160px; }
 .ok { color: var(--money); font-weight: 600; }
 .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 10px; overflow-x: auto; white-space: pre; }

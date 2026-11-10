@@ -1,16 +1,18 @@
 /**
- * Money tests run against a fake PayPal (fetch is stubbed) so they are
+ * Money tests run against a fake PayPal (fetch is stubbed for the REST calls,
+ * and the PayPal Server SDK's controllers are stubbed for the SDK calls) so they are
  * deterministic and need no credentials. The live sandbox is exercised
  * separately by scripts/sandbox-smoke.ts on the deployed app.
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { freshDb, Db } from "../lib/db";
 import { answer } from "../lib/answer";
-import { creditCapture, runPayouts, applyItemStatus, balances, tryAutoReload } from "../lib/money-ops";
+import { creditCapture, runPayouts, applyItemStatus, balances, tryAutoReload, refundBalance } from "../lib/money-ops";
 import { sealPending, receiptBundle } from "../lib/sealing";
 import { internalChecks } from "../lib/reconcile";
 import { DEMO_APP_ID } from "../lib/seed";
 import type { CapturedOrder } from "../lib/paypal";
+import { OrdersController, PaymentsController } from "@paypal/paypal-server-sdk";
 
 let d: Db;
 const calls: { url: string; body: any }[] = [];
@@ -25,6 +27,18 @@ function fakePayPal() {
     if (url.endsWith("/v2/checkout/orders") && body?.payment_source?.paypal?.vault_id)
       return ok(captured("AUTO-" + calls.length, body.purchase_units[0].custom_id, body.purchase_units[0].amount.value), 201);
     return ok({}, 404);
+  });
+  // PayPal Server SDK calls (Orders, Payments). The SDK returns PayPal's raw JSON as `body`.
+  const sdkOk = (b: unknown) => ({ statusCode: 201, headers: {}, result: b, body: JSON.stringify(b) }) as never;
+  vi.spyOn(OrdersController.prototype, "createOrder").mockImplementation(async (req: any) => {
+    calls.push({ url: "sdk:createOrder", body: req.body });
+    const pu = req.body.purchaseUnits[0];
+    return sdkOk(captured("AUTO-" + calls.length, pu.customId, pu.amount.value));
+  });
+  vi.spyOn(PaymentsController.prototype, "refundCapturedPayment").mockImplementation(async (req: any) => {
+    calls.push({ url: "sdk:refund", body: { captureId: req.captureId, ...req.body } });
+    if (req.captureId === "CAP-REFUSED") throw new Error("PayPal refused the refund");
+    return sdkOk({ id: "RF-" + req.captureId, status: "COMPLETED", amount: { value: req.body.amount.value } });
   });
 }
 
@@ -67,6 +81,31 @@ describe("top-ups", () => {
     const fourth = await tryAutoReload(d, DEMO_APP_ID);
     expect(fourth.reloaded).toBe(false);
     expect(fourth.reason).toMatch(/limit/);
+  });
+});
+
+describe("refunds", () => {
+  it("refunds unused PayPal balance newest top-up first, and never the starting credit", async () => {
+    const bal = async () => BigInt((await d.query<{ b: string }>("SELECT balance_micro::text AS b FROM apps WHERE id = $1", [DEMO_APP_ID]))[0].b);
+    const [{ left }] = await d.query<{ left: string }>("SELECT sum(amount_cents - refunded_cents)::text AS left FROM topups WHERE app_id = $1 AND status = 'COMPLETED'", [DEMO_APP_ID]);
+    const before = await bal();
+    const r = await refundBalance(d, DEMO_APP_ID, "12.50");
+    expect(r.refunds.every((x) => x.status === "COMPLETED")).toBe(true);
+    expect(r.refunds.reduce((a, x) => a + BigInt(x.cents), 0n)).toBe(1250n);
+    expect(before - (await bal())).toBe(1_250_000_000n);
+    // More than was ever topped up through PayPal is refused, even though the balance (with the $20 credit) covers it.
+    const tooMuch = ((BigInt(left) - 1250n + 1n) / 100n + 1n).toString() + ".00";
+    await expect(refundBalance(d, DEMO_APP_ID, tooMuch)).rejects.toThrow(/topped up through PayPal/);
+  });
+
+  it("puts a refused refund back on the balance", async () => {
+    await d.query("INSERT INTO topups (paypal_order_id, app_id, amount_cents, status, capture_id, captured_at) VALUES ('O-REF', $1, 100000, 'COMPLETED', 'CAP-REFUSED', now() + interval '1 hour')", [DEMO_APP_ID]);
+    const bal = async () => BigInt((await d.query<{ b: string }>("SELECT balance_micro::text AS b FROM apps WHERE id = $1", [DEMO_APP_ID]))[0].b);
+    const before = await bal();
+    const r = await refundBalance(d, DEMO_APP_ID, "1.00");
+    expect(r.refunds[0].status).toBe("FAILED");
+    expect(await bal()).toBe(before);
+    await d.query("DELETE FROM topups WHERE paypal_order_id = 'O-REF'");
   });
 });
 

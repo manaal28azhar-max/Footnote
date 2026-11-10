@@ -121,6 +121,16 @@ export const SCHEMA: string[] = [
   `ALTER TABLE apps ADD COLUMN IF NOT EXISTS reload_weekly_cap_cents BIGINT NOT NULL DEFAULT 3000`,
   `ALTER TABLE topups ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'manual'`,
   `ALTER TABLE payout_items ADD COLUMN IF NOT EXISTS paypal_txn_id TEXT`,
+  `ALTER TABLE topups ADD COLUMN IF NOT EXISTS refunded_cents BIGINT NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS refunds (
+     id TEXT PRIMARY KEY,
+     app_id TEXT NOT NULL REFERENCES apps(id),
+     capture_id TEXT NOT NULL,
+     amount_cents BIGINT NOT NULL,
+     status TEXT NOT NULL,
+     paypal_refund_id TEXT,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
   `CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

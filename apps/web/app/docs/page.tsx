@@ -98,6 +98,24 @@ curl -i ${b}/s/priya-flat-loaf -H "X-Footnote-Probe: ai"  # same, from any clien
         </section>
 
         <section className="block">
+          <h2 className="h3">For AI agents: MCP</h2>
+          <p className="muted">
+            Footnote is also a remote MCP server. Add it to any MCP client and an agent can answer questions with paid attribution, check receipts, see its
+            balance and ask a human to top up with PayPal. Tools: <code>ask_with_attribution</code>, <code>verify_receipt</code>, <code>get_balance</code>,{" "}
+            <code>top_up_with_paypal</code>.
+          </p>
+          <pre className="code">{`# Remote MCP URL (Streamable HTTP)
+${b}/api/mcp
+
+# Claude Desktop / any stdio client, via mcp-remote:
+{
+  "mcpServers": {
+    "footnote": { "command": "npx", "args": ["-y", "mcp-remote", "${b}/api/mcp"] }
+  }
+}`}</pre>
+        </section>
+
+        <section className="block">
           <h2 className="h3">How credit is split</h2>
           <p className="muted">
             A writer model answers from the retrieved sources. A separate auditor model marks how strongly each source backs each sentence (full, partial or

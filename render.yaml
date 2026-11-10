@@ -1,4 +1,6 @@
-# One-click deploy on Render: the app, its Postgres database, and nightly jobs.
+# One-click deploy on Render: the app, its Postgres database, and the
+# nightly money jobs (seal receipts, pay creators, sync payout status,
+# reconcile with PayPal).
 services:
   - type: web
     name: footnote
@@ -21,13 +23,34 @@ services:
       - key: PAYPAL_CLIENT_SECRET
         sync: false
       - key: PAYPAL_WEBHOOK_ID
-        sync: false
+        sync: false # add after creating the webhook in the PayPal dashboard
       - key: SANDBOX_CREATOR_EMAILS
-        sync: false
-      - key: FOOTNOTE_SIGNING_KEY
-        sync: false
+        sync: false # comma-separated PayPal sandbox personal accounts
       - key: CRON_SECRET
         generateValue: true
+
+  - type: cron
+    name: footnote-nightly
+    runtime: node
+    plan: starter
+    schedule: "30 21 * * *" # 21:30 UTC daily
+    buildCommand: "true"
+    startCommand: >-
+      for job in seal payouts sync reconcile; do
+      curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "http://$FOOTNOTE_HOSTPORT/api/jobs/$job" || exit 1; echo;
+      done
+    envVars:
+      - key: CRON_SECRET
+        fromService:
+          type: web
+          name: footnote
+          envVarKey: CRON_SECRET
+      - key: FOOTNOTE_HOSTPORT # private network address of the web service
+        fromService:
+          type: web
+          name: footnote
+          property: hostport
+
 databases:
   - name: footnote-db
     plan: basic-256mb

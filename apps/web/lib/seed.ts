@@ -15,17 +15,32 @@ function resolveDate(s: string): string {
 }
 
 /** Insert the demo world once. Safe to call on every boot. */
+/**
+ * Demo creators share the PayPal sandbox personal accounts in rotation
+ * (SANDBOX_CREATOR_EMAILS, comma-separated). The content farm never gets one.
+ */
+function sandboxEmailFor(creatorId: string): string | null {
+  const emails = (process.env.SANDBOX_CREATOR_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!emails.length || creatorId === "farm") return null;
+  const k = CREATORS.filter((c) => c.id !== "farm").findIndex((c) => c.id === creatorId);
+  return k < 0 ? null : emails[k % emails.length];
+}
+
 export async function seed(d: Db) {
   const [{ n }] = await d.query<{ n: string }>("SELECT count(*)::text AS n FROM creators");
-  if (Number(n) > 0) return;
-
-  const sandboxEmails = (process.env.SANDBOX_CREATOR_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (Number(n) > 0) {
+    // Emails added after the first deploy: fill in creators who have no PayPal yet.
+    for (const c of CREATORS) {
+      const email = sandboxEmailFor(c.id);
+      if (email) await d.query("UPDATE creators SET paypal_email = $1 WHERE id = $2 AND paypal_email IS NULL AND paypal_payer_id IS NULL", [email, c.id]);
+    }
+    return;
+  }
 
   await d.tx(async (q) => {
-    for (const [i, c] of CREATORS.entries()) {
-      // Demo creators are pre-verified so the demo works end to end. A new
-      // creator signs up and verifies through /creators/join.
-      const email = c.id === "farm" ? null : sandboxEmails[i] || null;
+    for (const c of CREATORS) {
+      // Demo creators are pre-verified so the demo works end to end.
+      const email = sandboxEmailFor(c.id);
       await q(
         `INSERT INTO creators (id, name, handle, site, city, country, bio, paypal_email, verify_token, verified_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())`,

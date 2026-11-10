@@ -15,6 +15,15 @@ export default function Docs() {
         <p className="lede">Footnote has two sides: AI apps call one API to answer and pay, and creators add a gate so AI can only use their work through Footnote.</p>
 
         <section className="block">
+          <h2 className="h3">OpenAPI and SDKs</h2>
+          <p className="muted">
+            The whole API is described in OpenAPI 3.1 at <a href="/openapi.json">/openapi.json</a>. Import that URL into APIMatic to generate a typed SDK in
+            TypeScript, Python, Java, C#, Go, PHP or Ruby, plus a docs portal. On the PayPal side, Footnote itself uses PayPal’s official Server SDK, which
+            APIMatic generates from PayPal’s API specs.
+          </p>
+        </section>
+
+        <section className="block">
           <h2 className="h3">Answer a question and pay its sources</h2>
           <p className="muted">
             One call retrieves creator content, writes the answer, audits where every sentence came from, charges your balance and returns a receipt. Try it
@@ -62,6 +71,14 @@ curl -X POST ${b}/api/v1/topups -H "Authorization: Bearer <key>" \\
 # 2. After the payer approves, capture it. The balance is credited once,
 #    whether this call or PayPal's webhook arrives first.
 curl -X POST ${b}/api/v1/topups/<orderId>/capture`}</pre>
+        </section>
+
+        <section className="block">
+          <h2 className="h3">Withdraw unused balance</h2>
+          <pre className="code">{`curl -X POST ${b}/api/v1/refunds -H "Authorization: Bearer <key>" \\
+  -H "Content-Type: application/json" -d '{"amount_usd":"5.00"}'
+# Refunds go back to the PayPal account that paid, newest top-up first,
+# through the PayPal Payments refund API. A refused refund is put back.`}</pre>
         </section>
 
         <section className="block">

@@ -7,6 +7,7 @@ const LINKS = [
   ["/console", "AI app console"],
   ["/ledger", "Ledger"],
   ["/verify", "Verify a receipt"],
+  ["/eval", "Eval"],
   ["/docs", "Docs"],
 ] as const;
 

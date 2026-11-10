@@ -14,6 +14,8 @@ export interface RetrievedSource {
   terms: Terms;
   creditTo: string | null;
   copySimilarity: number | null;
+  /** Instructions aimed at AI systems that were removed from this page at ingestion. */
+  injectionRemoved: string[] | null;
   rank: number;
 }
 
@@ -40,7 +42,7 @@ export async function retrieve(q: Query, question: string, k = 5, expansion: str
   const tsq = toTsQuery([question, ...expansion].join(" "));
   if (!tsq) return [];
   const rows = await q<Record<string, unknown>>(
-    `SELECT s.id, s.creator_id, c.name AS creator_name, c.city, c.country, s.title, s.url, s.body,
+    `SELECT s.id, s.creator_id, c.name AS creator_name, c.city, c.country, s.title, s.url, coalesce(s.model_body, s.body) AS body, s.injection_removed,
             s.published_at, s.terms, s.credit_to, s.copy_similarity,
             ts_rank_cd(s.tsv, to_tsquery('english', $1), 32) AS rank
        FROM sources s JOIN creators c ON c.id = s.creator_id
@@ -69,6 +71,7 @@ export async function retrieve(q: Query, question: string, k = 5, expansion: str
       terms: (typeof r.terms === "string" ? JSON.parse(r.terms) : r.terms) as Terms,
       creditTo: (r.credit_to as string) ?? null,
       copySimilarity: r.copy_similarity == null ? null : Number(r.copy_similarity),
+      injectionRemoved: r.injection_removed ? ((typeof r.injection_removed === "string" ? JSON.parse(r.injection_removed) : r.injection_removed) as string[]) : null,
       rank: Number(r.rank),
     }));
 }

@@ -38,6 +38,8 @@ export interface AnswerSource {
   publishedAt: string;
   window: { label: string; multiplier: number };
   copyOf: { sourceId: string; creatorId: string; creatorName: string; similarity: number } | null;
+  /** Hidden instructions to AI systems removed from this page before any model saw it. */
+  injectionRemoved: string[] | null;
   /** Shapley share of this source (before copy credit is routed). */
   share: number;
 }
@@ -158,6 +160,7 @@ export async function answer(d: Db, appId: string, question: string, now = new D
       publishedAt: s.publishedAt,
       window: (({ label, multiplier }) => ({ label, multiplier }))(activeWindow(owners[i].terms, new Date(owners[i].publishedAt), now)),
       copyOf: s.creditTo ? { sourceId: s.creditTo, creatorId: owners[i].creatorId, creatorName: owners[i].creatorName, similarity: s.copySimilarity ?? 0 } : null,
+      injectionRemoved: s.injectionRemoved,
       share: attr.shares[i],
     })),
     credits,

@@ -122,6 +122,8 @@ export const SCHEMA: string[] = [
   `ALTER TABLE topups ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'manual'`,
   `ALTER TABLE payout_items ADD COLUMN IF NOT EXISTS paypal_txn_id TEXT`,
   `ALTER TABLE topups ADD COLUMN IF NOT EXISTS refunded_cents BIGINT NOT NULL DEFAULT 0`,
+  `ALTER TABLE sources ADD COLUMN IF NOT EXISTS model_body TEXT`,
+  `ALTER TABLE sources ADD COLUMN IF NOT EXISTS injection_removed JSONB`,
   `CREATE TABLE IF NOT EXISTS refunds (
      id TEXT PRIMARY KEY,
      app_id TEXT NOT NULL REFERENCES apps(id),

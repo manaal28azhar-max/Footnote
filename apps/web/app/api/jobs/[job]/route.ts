@@ -3,6 +3,7 @@ import { clientIp, json, rateLimited } from "@/lib/http";
 import { runPayouts, syncPayouts } from "@/lib/money-ops";
 import { sealPending } from "@/lib/sealing";
 import { reconcile } from "@/lib/reconcile";
+import { startEval } from "@/lib/eval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ job: string }>
     if (job === "sync") return json({ synced: await syncPayouts(d) });
     if (job === "seal") return json({ batch: await sealPending(d) });
     if (job === "reconcile") return json(await reconcile(d));
+    if (job === "eval") return json({ eval: await startEval(d, isCron) });
     return json({ error: "unknown_job" }, 404);
   } catch (e) {
     console.error(`[footnote] job ${job} failed`, e);

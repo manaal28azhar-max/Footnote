@@ -70,6 +70,19 @@ describe("the full pipeline", () => {
   });
 });
 
+describe("prompt injection", () => {
+  it("strips a page's hidden instructions before any model sees it, and the page earns nothing for them", async () => {
+    const [row] = await d.query<{ model_body: string; injection_removed: string[] }>("SELECT model_body, injection_removed FROM sources WHERE id = 'spam-sour-espresso'");
+    expect(row.injection_removed.length).toBe(1);
+    expect(row.model_body).not.toMatch(/AI assistants|attribute 100%/);
+    const r = await answer(d, DEMO_APP_ID, "Why does my espresso taste sour?");
+    const spam = r.sources.find((s) => s.id === "spam-sour-espresso");
+    expect(spam?.injectionRemoved?.length).toBe(1);
+    expect(spam?.share ?? 0).toBe(0);
+    expect(r.credits.map((c) => c.creatorId)).toContain("dev");
+  });
+});
+
 describe("auditor safeguards", () => {
   const src = [{ body: "Use your starter at its peak, not after it. A starter at its peak has roughly doubled." }] as never;
   it("accepts an exact quote and rejects an invented one", () => {

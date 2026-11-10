@@ -21,7 +21,7 @@ export default async function Creators() {
             <span>earned by creators so far</span>
           </div>
           <div className="stat">
-            <b>{rows.length - 1}</b>
+            <b>{rows.filter((r) => r.id !== "farm" && r.id !== "spam").length}</b>
             <span>creators in {new Set(rows.map((r) => r.country)).size} countries</span>
           </div>
           <div className="stat">
@@ -57,7 +57,7 @@ export default async function Creators() {
                 <td className="num money">{usd(r.earned, 4)}</td>
                 <td className="num">{usd(r.paid)}</td>
                 <td className="num">{usd(r.balance, 4)}</td>
-                <td>{r.id === "farm" ? <span className="tag copy">copies others</span> : r.connected ? <span className="ok">connected</span> : <span className="muted">not yet</span>}</td>
+                <td>{r.id === "farm" ? <span className="tag copy">copies others</span> : r.id === "spam" ? <span className="tag copy">prompt injection</span> : r.connected ? <span className="ok">connected</span> : <span className="muted">not yet</span>}</td>
               </tr>
             ))}
           </tbody>

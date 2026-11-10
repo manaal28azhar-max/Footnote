@@ -116,6 +116,7 @@ export function AskDemo({ initial }: { initial?: string }) {
   }, [result]);
 
   const copies = result?.sources.filter((s) => s.copyOf) ?? [];
+  const injected = result?.sources.filter((s) => s.injectionRemoved?.length) ?? [];
 
   return (
     <div>
@@ -246,6 +247,14 @@ export function AskDemo({ initial }: { initial?: string }) {
             <div className="copy-alert" key={c.id}>
               <b>Copy caught.</b> “{c.title}” is {Math.round((c.copyOf?.similarity ?? 0) * 100)}% identical to {c.copyOf?.creatorName}’s guide, which was published
               first. Its share of this answer went to {c.copyOf?.creatorName}.
+            </div>
+          ))}
+
+          {injected.map((s) => (
+            <div className="copy-alert" key={"inj-" + s.id}>
+              <b>Prompt injection blocked.</b> “{s.title}” hid instructions for AI systems in its page:{" "}
+              <q className="injected">{s.injectionRemoved![0].replace(/^\[|\]$/g, "").slice(0, 160)}…</q> Footnote removed them before any model read the page,
+              so it was paid only for what it actually contributed: {usd(result!.credits.find((c) => c.creatorId === s.paidCreatorId)?.amountMicro ?? "0")}.
             </div>
           ))}
 

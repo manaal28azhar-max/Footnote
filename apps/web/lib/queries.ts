@@ -30,7 +30,8 @@ export async function creatorDetail(d: Db, id: string) {
     [id],
   );
   const earnings = await d.query<Record<string, unknown>>(
-    `SELECT l.created_at, l.amount_micro::text AS amount, l.receipt_id, l.source_id, a.question, a.mode, r.body->>'priceMicro' AS price
+    `SELECT l.created_at, l.amount_micro::text AS amount, l.receipt_id, l.source_id, a.question, a.mode, r.body->>'priceMicro' AS price,
+            (SELECT string_agg(DISTINCT coalesce(s.credit_to, s.id), ',') FROM sources s WHERE s.id = ANY(string_to_array(l.source_id, ','))) AS for_sources
        FROM ledger l JOIN receipts r ON r.id = l.receipt_id JOIN answers a ON a.id = r.answer_id
       WHERE l.creator_id = $1 AND l.kind = 'earning' ORDER BY l.created_at DESC LIMIT 500`,
     [id],
@@ -61,7 +62,7 @@ export async function appDetail(d: Db, appId: string) {
     [appId],
   );
   const topups = await d.query<Record<string, unknown>>(
-    "SELECT paypal_order_id, amount_cents::text AS cents, status, kind, capture_id, created_at FROM topups WHERE app_id = $1 ORDER BY created_at DESC",
+    "SELECT paypal_order_id, amount_cents::text AS cents, refunded_cents::text AS refunded, status, kind, capture_id, created_at FROM topups WHERE app_id = $1 ORDER BY created_at DESC",
     [appId],
   );
   return {

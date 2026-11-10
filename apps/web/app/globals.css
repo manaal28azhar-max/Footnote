@@ -183,3 +183,17 @@ h1, h2, h3 { font-weight: 600; letter-spacing: -0.015em; margin: 0; }
 .check { display: flex; gap: 10px; align-items: baseline; }
 .check b { min-width: 22px; }
 .copy-alert q.injected { font-style: italic; color: var(--ink-2, #4a5468); }
+.grid-box { display: flex; flex-direction: column; gap: 8px; }
+.grid-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.grid-tools .input { width: min(280px, 100%); }
+.grid-tools .grow { flex: 1; }
+.small-btn { padding: 6px 12px; font-size: 0.875rem; }
+.grid-total { font-weight: 700; background: #f6f7f9; }
+.row-bad { background: #fdf0ee !important; }
+.row-wait { background: #fffaf0 !important; }
+.amt-neg { color: var(--bad); }
+.amt-pos { color: var(--money); }
+.fn-bar { display: flex; flex-direction: column; line-height: 1.15; overflow: hidden; }
+.fn-bar b { font-weight: 700; white-space: nowrap; }
+.fn-bar span { font-size: 0.75rem; opacity: 0.85; white-space: nowrap; }
+.chip:disabled { opacity: 0.45; cursor: not-allowed; }

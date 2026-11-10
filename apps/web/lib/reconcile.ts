@@ -54,18 +54,35 @@ export async function reconcile(d: Db) {
     [since.toISOString()],
   );
   const cents = (v: string) => BigInt(Math.round(Math.abs(Number(v)) * 100));
-  const check = (id: string, expected: string) => {
+  type Row = { kind: string; id: string; ours_cents: string; paypal_cents: string | null; paypal_status: string | null; paypal_code: string | null; result: "matched" | "pending" | "mismatch" };
+  const check = (kind: string, id: string, expected: string): Row => {
     const t = byId.get(id);
-    if (!t) return "pending"; // PayPal's reporting can lag a few hours behind
-    return cents(t.transaction_amount.value) === BigInt(expected) ? "matched" : "mismatch";
+    // PayPal's reporting can lag a few hours behind, so missing = pending, not wrong.
+    if (!t) return { kind, id, ours_cents: expected, paypal_cents: null, paypal_status: null, paypal_code: null, result: "pending" };
+    const theirs = cents(t.transaction_amount.value);
+    return {
+      kind,
+      id,
+      ours_cents: expected,
+      paypal_cents: theirs.toString(),
+      paypal_status: t.transaction_status,
+      paypal_code: t.transaction_event_code,
+      result: theirs === BigInt(expected) ? "matched" : "mismatch",
+    };
   };
-  const results = [...caps.map((c) => check(c.capture_id, c.amount_cents)), ...pays.map((p) => check(p.paypal_txn_id, p.amount_cents)), ...refs.map((r) => check(r.paypal_refund_id, r.amount_cents))];
+  const rows = [
+    ...caps.map((c) => check("Top-up capture", c.capture_id, c.amount_cents)),
+    ...pays.map((p) => check("Creator payout", p.paypal_txn_id, p.amount_cents)),
+    ...refs.map((r) => check("Refund", r.paypal_refund_id, r.amount_cents)),
+  ];
+  const results = rows.map((r) => r.result);
   const paypal = {
     checked: results.length,
     matched: results.filter((x) => x === "matched").length,
     pending: results.filter((x) => x === "pending").length,
     mismatched: results.filter((x) => x === "mismatch").length,
     at: new Date().toISOString(),
+    rows: rows.slice(0, 500),
   };
   await d.query("INSERT INTO settings (key, value) VALUES ('last_reconcile', $1) ON CONFLICT (key) DO UPDATE SET value = $1", [JSON.stringify(paypal)]);
   return { internal, paypal };

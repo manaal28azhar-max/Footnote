@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { ledgerRows, payoutBatches } from "@/lib/queries";
 import { internalChecks } from "@/lib/reconcile";
 import { paypalConfigured } from "@/lib/paypal";
-import { LedgerGrid } from "@/components/Grids";
+import { LedgerGrid, ReconcileGrid } from "@/components/Grids";
 import { JobButtons } from "@/components/JobButtons";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export default async function Ledger() {
   const d = await db();
   const [rows, batches, checks] = await Promise.all([ledgerRows(d), payoutBatches(d), internalChecks(d)]);
   const [last] = await d.query<{ value: string }>("SELECT value FROM settings WHERE key = 'last_reconcile'");
-  const recon = last ? (JSON.parse(last.value) as { checked: number; matched: number; pending: number; mismatched: number; at: string }) : null;
+  const recon = last ? (JSON.parse(last.value) as { checked: number; matched: number; pending: number; mismatched: number; at: string; rows?: Record<string, unknown>[] }) : null;
   const paypal = paypalConfigured();
 
   return (
@@ -85,6 +85,17 @@ export default async function Ledger() {
             </table>
           </section>
         )}
+
+        {recon?.rows?.length ? (
+          <section className="block">
+            <h2 className="h3">Our books next to PayPal’s</h2>
+            <p className="muted">
+              Every capture, payout and refund in Footnote’s ledger, looked up in PayPal’s own records with Transaction Search. A mismatch is highlighted red; a
+              transaction PayPal hasn’t reported yet is yellow.
+            </p>
+            <ReconcileGrid rows={recon.rows} />
+          </section>
+        ) : null}
 
         <section className="block">
           <h2 className="h3">All entries</h2>

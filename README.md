@@ -93,7 +93,7 @@ flowchart LR
 No database or keys needed for a local run: it uses PGlite (Postgres in WebAssembly) and offline mode.
 
 ```bash
-git clone https://github.com/<you>/footnote && cd footnote
+git clone https://github.com/manaal28azhar-max/Footnote && cd footnote
 npm install
 npm run build && npm start      # http://localhost:3000
 npm test                        # 36 tests: engine + pipeline + money flows

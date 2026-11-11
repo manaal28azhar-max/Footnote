@@ -23,7 +23,7 @@ function resolveDate(s: string): string {
 const UNPAID = new Set(["farm", "spam"]); // the demo's bad actors never get a PayPal account
 
 function sandboxEmailFor(creatorId: string): string | null {
-  const emails = (process.env.SANDBOX_CREATOR_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const emails = (process.env.SANDBOX_CREATOR_EMAILS || "").split(",").map((s) => s.trim()).filter((s) => s.includes("@")); // "none" = not set up yet
   if (!emails.length || UNPAID.has(creatorId)) return null;
   const k = CREATORS.filter((c) => !UNPAID.has(c.id)).findIndex((c) => c.id === creatorId);
   return k < 0 ? null : emails[k % emails.length];

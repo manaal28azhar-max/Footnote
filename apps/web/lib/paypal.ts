@@ -289,8 +289,8 @@ export async function exchangeConnectCode(code: string) {
 // ---------- Webhooks ----------
 
 export async function verifyWebhook(headers: Headers, event: unknown): Promise<boolean> {
-  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
-  if (!webhookId) return false;
+  const webhookId = (process.env.PAYPAL_WEBHOOK_ID || "").trim();
+  if (!webhookId || webhookId.toLowerCase() === "none") return false; // "none" = not set up yet
   const h = (k: string) => headers.get(k) || "";
   const out = await pp<{ verification_status: string }>("POST", "/v1/notifications/verify-webhook-signature", {
     auth_algo: h("paypal-auth-algo"),

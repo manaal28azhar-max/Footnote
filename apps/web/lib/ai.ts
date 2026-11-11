@@ -284,7 +284,7 @@ export async function generate(q: Query, question: string, sources: RetrievedSou
       err.status === 404 ? `the model was not found (${WRITER_MODEL} / ${AUDITOR_MODEL})` :
       err.status === 429 ? "Claude is rate-limiting this key" :
       err.status === 529 || err.status === 503 ? "Claude is overloaded right now" :
-      `the model call failed${err.status ? ` (HTTP ${err.status})` : ""}`;
+      `the model call failed${err.status ? ` (HTTP ${err.status}: ${String(err.message).replace(/sk-ant-[\w-]+/g, "[key]").slice(0, 200)})` : ""}`;
     return { sentences: offlineAnswer(question, sources), mode: "offline", offlineReason: why };
   }
 }

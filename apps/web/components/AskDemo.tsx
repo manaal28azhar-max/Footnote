@@ -189,7 +189,7 @@ export function AskDemo({ initial }: { initial?: string }) {
             <p className="answer-meta">
               {result.mode === "claude"
                 ? `Written by ${result.models?.writer}. Audited separately by ${result.models?.auditor}, which had to quote its evidence. ${Math.round(result.sourcedFraction * 100)}% of the answer is backed by creators.`
-                : `Offline demo mode: the answer is assembled from source sentences without a model. ${Math.round(result.sourcedFraction * 100)}% of the answer is backed by creators.`}
+                : `Offline demo mode${result.offlineReason ? ` (${result.offlineReason})` : ""}: the answer is assembled from source sentences without a model. ${Math.round(result.sourcedFraction * 100)}% of the answer is backed by creators.`}
             </p>
           </div>
 

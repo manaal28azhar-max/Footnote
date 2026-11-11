@@ -56,6 +56,7 @@ export interface AnswerResult {
   receiptId: string | null;
   question: string;
   mode: "claude" | "offline";
+  offlineReason?: string;
   simulated?: boolean;
   models?: { writer: string; auditor: string };
   sentences: (AuditedSentence & { split: number[] })[];
@@ -146,6 +147,7 @@ export async function answer(d: Db, appId: string, question: string, now = new D
     mode: gen.mode,
     simulated: opts.simulated || undefined,
     models: gen.models,
+    offlineReason: gen.offlineReason,
     sentences: gen.sentences.map((s, j) => ({ ...s, split: attr.perSentence[j] })),
     sources: sources.map((s, i) => ({
       index: i,

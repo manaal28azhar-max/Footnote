@@ -29,6 +29,8 @@ export interface Generated {
   sentences: AuditedSentence[];
   mode: "claude" | "offline";
   models?: { writer: string; auditor: string };
+  /** Why the models were not used, when mode is offline. */
+  offlineReason?: string;
 }
 
 const LEVEL_VALUE: Record<Level, number> = { full: 1, partial: 0.5, none: 0 };
@@ -213,24 +215,28 @@ export function offlineAnswer(question: string, sources: RetrievedSource[]): Aud
       const fit = overlap(qw, cw);
       // Informative = says something beyond restating the question.
       const novel = [...cw].filter((w) => ![...qw].some((q) => q === w || (q.length >= 4 && w.startsWith(q.slice(0, 5))))).length;
-      return { text, i, fit, novel, score: fit + 0.25 / (pos + 1) + 0.1 / (i + 1) };
+      const matched = [...qw].filter((q) => [...cw].some((w) => w === q || (q.length >= 4 && w.startsWith(q.slice(0, 5))))).length;
+      return { text, i, fit, novel, matched, score: fit + 0.25 / (pos + 1) + 0.1 / (i + 1) };
     }),
   );
   candidates.sort((a, b) => b.score - a.score);
-  const pick = (minFit: number, minNovel: number) => {
+  const pick = (minFit: number, minNovel: number, from?: Set<number>, minMatched = 1) => {
     const out: string[] = [];
     for (const c of candidates) {
       if (out.length >= 4) break;
-      if (c.fit < minFit || c.novel < minNovel) continue;
+      if (c.fit < minFit || c.novel < minNovel || c.matched < minMatched || (from && !from.has(c.i))) continue;
       const cw = contentWords(c.text);
       if (out.some((p) => overlap(cw, contentWords(p)) > 0.6)) continue;
       out.push(c.text);
     }
     return out;
   };
+  // Heuristics can't judge a page that was caught trying to instruct AI systems, so
+  // offline mode gives it no benefit of the doubt (the model audit judges it on its merits).
+  const trusted = new Set(sources.map((s, i) => (s.injectionRemoved?.length ? -1 : i)).filter((i) => i >= 0));
   // Prefer on-topic, informative sentences; relax only if that leaves too little.
-  let picked = pick(0.5, 4);
-  if (picked.length < 2) picked = pick(0.25, 3);
+  let picked = pick(0.5, 4, trusted);
+  if (picked.length < 2) picked = pick(0.25, 3, trusted);
   if (picked.length < 1) picked = pick(0, 0);
   return picked.map((text) => {
     const tw = contentWords(text);
@@ -260,9 +266,8 @@ export async function generate(q: Query, question: string, sources: RetrievedSou
   if (hit[0]) return hit[0].value;
 
   const [{ n }] = await q<{ n: string }>("SELECT count(*)::text AS n FROM llm_cache WHERE created_at > now() - interval '1 day'");
-  if (!process.env.ANTHROPIC_API_KEY || Number(n) >= DAILY_LIMIT) {
-    return { sentences: offlineAnswer(question, sources), mode: "offline" };
-  }
+  if (!process.env.ANTHROPIC_API_KEY) return { sentences: offlineAnswer(question, sources), mode: "offline", offlineReason: "no Claude API key is set on the server" };
+  if (Number(n) >= DAILY_LIMIT) return { sentences: offlineAnswer(question, sources), mode: "offline", offlineReason: "today's demo budget for model calls is used up" };
 
   try {
     const sentences = await write(question, sources);
@@ -271,7 +276,15 @@ export async function generate(q: Query, question: string, sources: RetrievedSou
     await q("INSERT INTO llm_cache (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING", [key, JSON.stringify(result)]);
     return result;
   } catch (e) {
-    console.error("[footnote] model call failed, using offline mode:", (e as Error).message);
-    return { sentences: offlineAnswer(question, sources), mode: "offline" };
+    const err = e as Error & { status?: number };
+    console.error("[footnote] model call failed, using offline mode:", err.status, err.message);
+    const why =
+      err.status === 401 ? "the Claude API key was rejected" :
+      err.status === 400 && /credit/i.test(err.message) ? "the Claude account has no credit" :
+      err.status === 404 ? `the model was not found (${WRITER_MODEL} / ${AUDITOR_MODEL})` :
+      err.status === 429 ? "Claude is rate-limiting this key" :
+      err.status === 529 || err.status === 503 ? "Claude is overloaded right now" :
+      `the model call failed${err.status ? ` (HTTP ${err.status})` : ""}`;
+    return { sentences: offlineAnswer(question, sources), mode: "offline", offlineReason: why };
   }
 }

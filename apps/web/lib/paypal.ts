@@ -31,7 +31,9 @@ import {
 export const PAYPAL_API = process.env.PAYPAL_API_BASE || "https://api-m.sandbox.paypal.com";
 export const PAYPAL_WEB = process.env.PAYPAL_WEB_BASE || "https://www.sandbox.paypal.com";
 
-export const paypalConfigured = () => !!(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
+const clientId = () => (process.env.PAYPAL_CLIENT_ID || "").trim();
+const clientSecret = () => (process.env.PAYPAL_CLIENT_SECRET || "").trim();
+export const paypalConfigured = () => !!(clientId() && clientSecret());
 
 export class PayPalError extends Error {
   constructor(
@@ -43,7 +45,7 @@ export class PayPalError extends Error {
   }
 }
 
-const basic = () => "Basic " + Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString("base64");
+const basic = () => "Basic " + Buffer.from(`${clientId()}:${clientSecret()}`).toString("base64");
 
 let cached: { token: string; until: number } | null = null;
 
@@ -96,7 +98,7 @@ let sdkClient: Client | null = null;
 function sdk() {
   if (!sdkClient)
     sdkClient = new Client({
-      clientCredentialsAuthCredentials: { oAuthClientId: process.env.PAYPAL_CLIENT_ID || "", oAuthClientSecret: process.env.PAYPAL_CLIENT_SECRET || "" },
+      clientCredentialsAuthCredentials: { oAuthClientId: clientId(), oAuthClientSecret: clientSecret() },
       environment: PAYPAL_API.includes("sandbox") ? Environment.Sandbox : Environment.Production,
       timeout: 20_000,
     });
@@ -262,7 +264,7 @@ export const getPayoutBatch = (batchId: string) => pp<PayoutBatchDetails>("GET",
 export function connectUrl(redirectUri: string, state: string) {
   const p = new URLSearchParams({
     flowEntry: "static",
-    client_id: process.env.PAYPAL_CLIENT_ID || "",
+    client_id: clientId(),
     response_type: "code",
     scope: "openid email https://uri.paypal.com/services/paypalattributes",
     redirect_uri: redirectUri,

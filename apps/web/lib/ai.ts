@@ -36,7 +36,7 @@ export interface Generated {
 const LEVEL_VALUE: Record<Level, number> = { full: 1, partial: 0.5, none: 0 };
 
 let client: Anthropic | null = null;
-const anthropic = () => (client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
+const anthropic = () => (client ??= new Anthropic({ apiKey: (process.env.ANTHROPIC_API_KEY || "").trim() }));
 
 function sourceBlock(sources: RetrievedSource[]) {
   return sources.map((s, i) => `<source id="S${i + 1}" title="${s.title.replace(/"/g, "'")}">\n${s.body}\n</source>`).join("\n\n");

@@ -42,14 +42,47 @@ function sourceBlock(sources: RetrievedSource[]) {
   return sources.map((s, i) => `<source id="S${i + 1}" title="${s.title.replace(/"/g, "'")}">\n${s.body}\n</source>`).join("\n\n");
 }
 
+/** Structured-output JSON schemas need closed objects and no numeric/length limits (we validate those in code). */
+function strictSchema(x: unknown): unknown {
+  if (Array.isArray(x)) return x.map(strictSchema);
+  if (!x || typeof x !== "object") return x;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+    if (["minItems", "maxItems", "minimum", "maximum", "minLength", "maxLength", "pattern"].includes(k)) continue;
+    out[k] = strictSchema(v);
+  }
+  if (out.type === "object") out.additionalProperties = false;
+  return out;
+}
+
+/**
+ * One structured call. Current models take a JSON schema through structured
+ * outputs (output_config.format); if a model rejects that, fall back to a
+ * tool the model is asked to call.
+ */
 async function callTool<T>(model: string, system: string, user: string, tool: Anthropic.Tool): Promise<T> {
+  try {
+    const msg = await anthropic().messages.create({
+      model,
+      max_tokens: 2000,
+      system,
+      messages: [{ role: "user", content: user }],
+      output_config: { format: { type: "json_schema", schema: strictSchema(tool.input_schema) as Record<string, unknown> } },
+    });
+    const text = msg.content.find((b) => b.type === "text");
+    if (!text || text.type !== "text") throw new Error("Model returned no structured output");
+    return JSON.parse(text.text) as T;
+  } catch (e) {
+    if ((e as { status?: number }).status !== 400) throw e;
+    console.warn("[footnote] structured output rejected, retrying with a tool call:", (e as Error).message.slice(0, 200));
+  }
   const msg = await anthropic().messages.create({
     model,
     max_tokens: 2000,
-    system,
+    system: system + ` Reply only by calling the ${tool.name} tool.`,
     messages: [{ role: "user", content: user }],
     tools: [tool],
-    tool_choice: { type: "tool", name: tool.name },
+    tool_choice: { type: "auto" },
   });
   const block = msg.content.find((b) => b.type === "tool_use");
   if (!block || block.type !== "tool_use") throw new Error("Model returned no structured output");

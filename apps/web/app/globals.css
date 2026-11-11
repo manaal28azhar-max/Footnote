@@ -38,8 +38,9 @@ body {
   font-family: var(--sans);
   font-size: var(--s0);
   line-height: 1.5;
-  font-feature-settings: "tnum" 1;
 }
+/* Tabular figures only where numbers line up; on body text this font also widens commas and full stops. */
+.money, .num, .bill, .stat b, .ag-cell { font-variant-numeric: tabular-nums; }
 a { color: inherit; text-underline-offset: 3px; }
 a:hover { color: var(--focus); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
